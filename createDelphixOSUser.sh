@@ -26,6 +26,7 @@ PS="/bin/ps"
 
 #Command Flag Defaults
 CREATEUSER=false
+#We leave AUTHTYPE unset
 SUDO=false
 KERNEL=false
 QUIET=false
@@ -65,20 +66,25 @@ usage() {
   echo
   echo 'Copyright (c) 2009,2010,2020 Delphix, All Rights Reserved.'
   echo
-  echo "Usage: $0 -t source|target [ -u ] [ -k ] [ -s ] [ -y ]" 
+  echo "Usage: $0 -t source|target [ -a key|passwd ] [ -u ] [ -k ] [ -s ] [ -q ]" 
   echo
   echo "-t : Type <source or target>.  REQUIRED PARAMETER"
   echo 
   echo "-u : Create User. OPTIONAL"
   echo
+  echo "-a : Auth Type <key or passwd>. OPTIONAL"
+  echo "     key: Add SSH Public Key for Delphix Engine to authorized_keys for the user."
+  echo "     passwd: Add a password using the passwd utility.  Not compatible with quiet mode"
+  echo "     If you don't do either one, you'll be left with a user that cannot login, but you could su as root."
+  echo
   echo "-s : sudo privs. OPTIONAL"
-  echo "Delphix targets require some kind of elevated privilege"
-  echo "Delphix sources only require elevated privilege if you use a non default TNS_ADMIN"
-  echo "If you don't use sudo for privilege elevation, you must use Privilege Elevation Profiles which isn't covered by this script."
+  echo "     Delphix targets require some kind of elevated privilege"
+  echo "     Delphix sources only require elevated privilege if you use a non default TNS_ADMIN"
+  echo "     If you don't use sudo for privilege elevation, you must use Privilege Elevation Profiles which isn't covered by this script."
   echo 
   echo "-k : kernel parameters. This only works for targets.  Highly Recommended for Delphix Targets. OPTIONAL"
   echo 
-  echo "-q : Quiet.  Automaticall says "Y" to all prompts and accepts defaults.  Specify -y for full automation."
+  echo "-q : Quiet.  Automatically says "Y" to all prompts and accepts defaults.  Specify -y for full automation. OPTIONAL"
 }
 
 #Function to exit and print Usage
@@ -94,6 +100,7 @@ info() {
 echo "Running for Type: ${TYPE}"
 if [ ${QUIET} = "true" ]; then echo "Quiet: ON"; else echo "Quiet: OFF"; fi
 if [ ${CREATEUSER} = "true" ]; then echo "Create User: ON"; else echo "Create User: OFF"; fi
+if [ -n "${AUTHTYPE}" ]; then echo "Authorization Type: ${AUTHTYPE}"; else echo "Authorization Type: NO LOGIN"; fi
 if [ ${SUDO} = "true" ]; then echo "Perform Sudo: ON"; else echo "Perform Sudo: OFF"; fi
 if [ ${KERNEL} = "true" ]; then echo "Perform Kernel Tuning: ON"; else echo "Perform Kernel Tuning: OFF"; fi
 echo
@@ -280,16 +287,6 @@ fi
 
 echo "Created user \"${USERNAME}\"."
 
-# Set the password of the new user
-#echo
-#echo "Setting password for user \"${USERNAME}\". Enter the password when prompted."
-#passwd ${USERNAME}
-#if [ $? -ne 0 ]; then
-#    echo "Failed to set password for user \"${USERNAME}\". Please review errors and set the password manually."
-#    exit 1
-#fi
-#echo
-
 echo "Setting umask for \"${USERNAME}\" to 022 ..."
 umask 022 ${USERNAME}
 if [ $? -ne 0 ]; then
@@ -394,13 +391,13 @@ echo
 sudo_privs() {
 echo "Next is the sudo permissions.  You should skip this if you're using an alternative privilege elevation technique."
 echo
-echo "Continue ? (Y/N):"
+echo "Continue ? If you say N we will skip sudo permissions. (Y/N):"
 yes_or_no ${option}
 if [ "${option}" = "N" ] || [ "${option}" = "n" ]; then
   return
 fi
 
-echo "This script will comment out anything which exists in /etc/sudoers for \"${USERNAME}\" and add the following lines"
+echo "This script will add the following lines in /etc/sudoers for \"${USERNAME}\""
 if [ ${TYPE} = "target" ]; then
   echo "#Delphix Target Permissions"
   echo "Defaults:${USERNAME} !requiretty"
@@ -418,10 +415,11 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 cp /etc/sudoers /tmp/sudoers.bak.$NOW
-value=$(cat /tmp/sudoers.bak| grep $USERNAME| wc -l )
-if [ $value -ge 1 ]; then
-    sed -i "/$USERNAME/ s/^/# /" /etc/sudoers
-fi
+#Old Code to add comments for username
+#value=$(cat /tmp/sudoers.bak| grep $USERNAME| wc -l )
+#if [ $value -ge 1 ]; then
+#    sed -i "/$USERNAME/ s/^/# /" /etc/sudoers
+#fi
 if [ ${TYPE} = "target" ]; then
   echo "#Delphix Target Permissions" >> /etc/sudoers
   echo "Defaults:${USERNAME} !requiretty" >> /etc/sudoers
@@ -446,7 +444,9 @@ echo
 
 #Function to do Target Kernel Parameter Tuning
 kernel_parms() {
-echo "Continue ? (Y/N):"
+echo "Next is the Target Kernel Parameter Tunings.  This is optional but highly recommended."
+echo
+echo "Continue ? If you say N we will skip target tunings. (Y/N):"
 yes_or_no ${option}
 if [ "${option}" = "N" ] || [ "${option}" = "n" ]; then
   return
@@ -482,7 +482,7 @@ echo
 
 #Function to add keys
 add_ssh_keys() {
-
+echo
 echo "Creating and Adding Key to \"${USERNAME}\" authorized_keys file"
 mkdir ${HOMEDIR}/.ssh
 echo "${KEY}" >> ${HOMEDIR}/.ssh/authorized_keys
@@ -490,12 +490,25 @@ chown -R ${USERNAME}:${PGROUP} ${HOMEDIR}/.ssh
 chmod 600 ${HOMEDIR}/.ssh/authorized_keys
 }
 
+#Function to run passwd
+add_passwd() {
+
+echo
+echo "Setting password for user \"${USERNAME}\". Enter the password when prompted."
+passwd ${USERNAME}
+if [ $? -ne 0 ]; then
+    echo "Failed to set password for user \"${USERNAME}\". Please review errors and set the password manually."
+    exit 1
+fi
+}
 
 
 
 
 
-while getopts "kst:quh" OPTION; do
+
+
+while getopts "kst:quha:" OPTION; do
     case $OPTION in
     k)
         KERNEL=true
@@ -506,7 +519,7 @@ while getopts "kst:quh" OPTION; do
     t)
         TYPE=$OPTARG
         if [ $TYPE != "source" ] && [ $TYPE != "target" ]; then
-            echo "Incorrect options provided"
+            echo "-t Type must be \"source\" or \"target\""
             exit_abnormal
         fi
         ;;
@@ -515,6 +528,13 @@ while getopts "kst:quh" OPTION; do
         ;;
     u)
         CREATEUSER=true
+        ;;
+    a)
+        AUTHTYPE=$OPTARG
+        if [ $AUTHTYPE != "key" ] && [ $AUTHTYPE != "passwd" ]; then
+            echo "-a Authorization Type must be \"key\" or \"passwd\""
+            exit_abnormal
+        fi
         ;;
     h)
         usage
@@ -531,23 +551,36 @@ while getopts "kst:quh" OPTION; do
     esac
 done
 
+#Define Mandatory Parameters
 if [ -z "$TYPE" ]; then
   echo "You must specify -t <source|target>"
   exit_abnormal
 fi
 
+#Define Invalid Parameter Combinations
 if [ ${TYPE} = "source" ] && [ ${KERNEL} = "true" ]; then
    echo "It's an invalid combination to use -k and -t source."
    exit_abnormal
 fi
 
+if [ ${AUTHTYPE} = "passwd" ] && [ ${QUIET} = "true" ]; then
+   echo "It's an invalid combination to use -a passwd and -q (quiet) because the passwd function is interactive."
+   exit_abnormal
+fi
 
 #Main Action of the script
 
 info                                   #Tell the user what the script will do, based on arguments and default parameters
 facts                                  #Report some basic facts about the system
 if [ ${CREATEUSER} = true ]; then
-  create_delphix_os                      #Create the User
+  create_delphix_os                    #Create the User
+fi
+if [ -n "$AUTHTYPE" ]; then
+  if [ ${AUTHTYPE} = "key" ]; then
+    add_ssh_keys                         #Add Key(s) to .ssh authorized_keys file
+  elif [ ${AUTHTYPE} = "passwd" ]; then
+    add_passwd                         #Run passwd function
+  fi
 fi
 if [ ${SUDO} = true ]; then            #Add sudo privs
   sudo_privs  
