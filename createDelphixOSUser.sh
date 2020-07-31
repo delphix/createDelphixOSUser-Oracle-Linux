@@ -5,16 +5,11 @@
 #RFE:  Dynamically get the ssh key from the engine(s)
 #RFE:  Check the package requirements with grep, rather than just reporting them
 #RFE:  Warn if oratab is missing or empty
-#RFE:  Allow Password flag, but only if not Quiet
-#RFE:  Allow Key Flag
 
 
 
 #Defaults
-#USERNAME="delphix_os"
-USERNAME="ranzo2"
-HOMEDIR=/home/${USERNAME}
-TOOLKIT=${HOMEDIR}/toolkit
+#Note additional variables are set at the bottom of the script
 NFS_LOCATION=/u01/app/delphix_os/mnt
 KEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCnI9i9CAP96qeDAIYWDVFdVvchxfCmHoTQ70UiOffLmI5msDv1xIt+OKzeBsAxt8ZYFbR6xxSiLlMfT/C1GaKZVIvW5RyuUhQMMtvTWGagb4S+61xOoJ/zPhMb+8uLcbYw6zCUXgIDS9v19DGau4I0/d0T4nUcMg1F8oonfkVLzI9JghsbPwkL5C2mVwdoOa8pUqcvuHb3oQ7ULLq7+RyoQbpLA2Gsmg55ThXsa4smb/ueOfF9XUfZW+DOQ/qo5olGQCoSH1CKBe8S1w/CYOqJZSvaD72nRjTR1aJKvQdA+gCjKEZ3tl+pmXnoD0AbctEJIZBMB/h27uwzuoLfdTPV root@ip-10-234-194-100"
 
@@ -66,7 +61,9 @@ usage() {
   echo
   echo 'Copyright (c) 2009,2010,2020 Delphix, All Rights Reserved.'
   echo
-  echo "Usage: $0 -t source|target [ -a key|passwd ] [ -u ] [ -k ] [ -s ] [ -q ]" 
+  echo "Usage: $0 -t source|target [ -a key|passwd ] [ -u ] [ -k ] [ -s ] [ -q ] username " 
+  echo
+  echo "username : the user to create and grant sudo privileges to.  REQUIRED PARAMETER"
   echo
   echo "-t : Type <source or target>.  REQUIRED PARAMETER"
   echo 
@@ -85,6 +82,12 @@ usage() {
   echo "-k : kernel parameters. This only works for targets.  Highly Recommended for Delphix Targets. OPTIONAL"
   echo 
   echo "-q : Quiet.  Automatically says "Y" to all prompts and accepts defaults.  Specify -y for full automation. OPTIONAL"
+  echo
+  echo "Examples:"
+  echo "Create user delphix for a source environment with key authentication:  createDelphixOSUser.sh -t source -u -a key delphix"
+  echo "Create user delphix for a target environment with password authentication:  createDelphixOSUser.sh -t target -u -a passwd delphix"
+  echo "Create user delphix for a source, with key auth, sudo privs, and kernel parameter changes:  createDelphixOSUser.sh -t target -u -a key -s -k delphix"
+  echo "Same as above with no interaction for full automation:  createDelphixOSUser.sh -t target -u -a key -s -k -q delphix"
 }
 
 #Function to exit and print Usage
@@ -455,6 +458,8 @@ fi
 echo "Tuning TCP Buffer Sizes - Parameters should be as below"
 echo
 echo "This script takes the recommended vendor approach of creating a file in /usr/lib/sysctl.d and running \"sysctl -p\""
+echo "This script will comment out identical settings in /etc/sysctl.conf, which would otherwise override the Delphix settings"
+echo "Admins can at their discretion set larger values, either in sysctl.conf or /usr/lib/sysctl.d/60-sysctl.conf"
 echo "----"
 echo "net.ipv4.tcp_timestamps = 1"
 echo "net.ipv4.tcp_sack = 1"
@@ -470,9 +475,29 @@ echo "net.ipv4.tcp_window_scaling = 1" >> /usr/lib/sysctl.d/60-sysctl.conf
 echo "net.ipv4.tcp_rmem = 4096 16777216 16777216" >> /usr/lib/sysctl.d/60-sysctl.conf
 echo "net.ipv4.tcp_wmem = 4096 4194304 16777216" >> /usr/lib/sysctl.d/60-sysctl.conf
 
+echo 
+echo "Running /sbin/sysctl -p /usr/lib/sysctl.d/60-sysctl.conf"
 /sbin/sysctl -p /usr/lib/sysctl.d/60-sysctl.conf
 if [ $? -ne 0 ]; then
     echo "Command \"sysctl -p /usr/lib/sysctl.d/60-sysctl.conf\" failed; aborting..."
+    exit 1
+fi
+
+#Make a backup and Comment out similar lines in /etc/sysctl.conf if they exist
+# sed will search for lines which are NOT comments ( ^[^#]* means starts with anything other than a "#" ) but contain the parameters either with "." or "/" notation, and add a Comment.
+
+cp /etc/sysctl.conf /tmp/sysctl.conf.$NOW
+sed -i "/^[^#]*net[\./]ipv4[\./]tcp_timestamps/s/^/#Commented out by Delphix /" /etc/sysctl.conf
+sed -i "/^[^#]*net[\./]ipv4[\./]tcp_sack/s/^/#Commented out by Delphix /" /etc/sysctl.conf
+sed -i "/^[^#]*net[\./]ipv4[\./]tcp_window_scaling/s/^/#Commented out by Delphix /" /etc/sysctl.conf
+sed -i "/^[^#]*net[\./]ipv4[\./]tcp_rmem/s/^/#Commented out by Delphix /" /etc/sysctl.conf
+sed -i "/^[^#]*net[\./]ipv4[\./]tcp_wmem/s/^/#Commented out by Delphix /" /etc/sysctl.conf
+
+echo
+echo "Running /sbin/sysctl -p /etc/sysctl.conf"
+/sbin/sysctl -p /etc/sysctl.conf
+if [ $? -ne 0 ]; then
+    echo "Command \"sysctl -p /etc/sysctl.conf\" failed; aborting..."
     echo "We put a copy of the original at /tmp/sysctl.conf.$NOW"
     exit 1
 fi
@@ -551,7 +576,18 @@ while getopts "kst:quha:" OPTION; do
     esac
 done
 
+#Eliminate flags and set $@ to remaining arguments
+shift $((OPTIND-1))
+
+#Check parameters
+
 #Define Mandatory Parameters
+
+if [ $# -ne 1 ]; then
+  echo "You must provide a username as the first and only positional argument"
+  exit_abnormal
+fi
+
 if [ -z "$TYPE" ]; then
   echo "You must specify -t <source|target>"
   exit_abnormal
@@ -563,10 +599,17 @@ if [ ${TYPE} = "source" ] && [ ${KERNEL} = "true" ]; then
    exit_abnormal
 fi
 
-if [ ${AUTHTYPE} = "passwd" ] && [ ${QUIET} = "true" ]; then
+if [ -n "${AUTHTYPE}" ]; then
+  if [ ${AUTHTYPE} = "passwd" ] && [ ${QUIET} = "true" ]; then
    echo "It's an invalid combination to use -a passwd and -q (quiet) because the passwd function is interactive."
    exit_abnormal
+  fi
 fi
+
+#Set variables based on user input
+USERNAME=$1
+HOMEDIR=/home/${USERNAME}
+TOOLKIT=${HOMEDIR}/toolkit
 
 #Main Action of the script
 
