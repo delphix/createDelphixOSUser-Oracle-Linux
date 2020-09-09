@@ -554,7 +554,7 @@ echo
 add_ssh_keys() {
 echo
 echo "Creating and Adding Key to \"${USERNAME}\" authorized_keys file"
-mkdir ${HOMEDIR}/.ssh
+mkdir -p ${HOMEDIR}/.ssh
 echo "${KEY}" >> ${HOMEDIR}/.ssh/authorized_keys
 chown -R ${USERNAME}:${PGROUP} ${HOMEDIR}/.ssh
 chmod 600 ${HOMEDIR}/.ssh/authorized_keys
