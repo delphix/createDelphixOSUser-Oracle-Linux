@@ -3,8 +3,7 @@
 # 'Copyright (c) 2009,2010,2020 Delphix, All Rights Reserved.'
 
 #RFE:  Dynamically get the ssh key from the engine(s)
-#RFE:  Check the package requirements with grep, rather than just reporting them
-#RFE:  Warn if oratab is missing or empty
+#RFE:  Don't add additional sudo privs if they already exist
 
 
 
@@ -137,9 +136,25 @@ if [ ${TYPE} = "target" ]; then
   echo "Note: This script will NOT install packages!! It will only list what is already installed."
   echo "Listing those on this system:"
   rpm -qa | grep  compat-libstdc++
+  if [ $? -ne 0 ]; then
+    echo "Missing package compat-libstdc++"
+    exit 1
+  fi
   rpm -qa | grep nfs
+  if [ $? -ne 0 ]; then
+    echo "Missing package nfs"
+    exit 1
+  fi
   rpm -qa | grep rpc
+  if [ $? -ne 0 ]; then
+    echo "Missing package rpc"
+    exit 1
+  fi
   rpm -qa | grep gcc
+  if [ $? -ne 0 ]; then
+    echo "Missing package gcc"
+    exit 1
+  fi
   echo
 fi
 
@@ -179,6 +194,24 @@ if [ ${QUIET} = "false" ]; then
   fi
 fi
 
+#Check if the user already exists
+echo
+echo "Checking if the user ${USERNAME} exists already"
+id ${USERNAME}
+if [ $? -eq 0 ]; then
+  USER_EXISTS=true
+  echo
+  echo "WARNING: User ${USERNAME} already exists."
+  echo "Script will continue, but will leave user alone, including Home Directory, Primary Group, and Secondary Groups"
+  echo "This script will not delete and recreate the user.  To achieve that, exit the script, delete the user, and rerun"
+  echo "Continue ? (Y/N)"
+  yes_or_no
+  if [ "${option}" = "N" ] || [ "${option}" = "n" ]; then
+    return
+  fi
+else
+  USER_EXISTS=false
+fi
 
 echo
 echo "The Delphix OS user \"${USERNAME}\" should be part of all OS groups which own Oracle homes (on this host) intended to be used with Delphix."
@@ -272,23 +305,22 @@ if [ "${option}" = "N" ] || [ "${option}" = "n" ]; then
 fi
 
 # Fire the command to create the user
-if [ ${SGROUPS} ];  then
+if [ ${USER_EXISTS} = "false" ]; then
+  if [ ${SGROUPS} ];  then
     useradd -d ${HOMEDIR} -g ${PGROUP} -G ${SGROUPS} ${USERNAME}
     if [ $? -ne 0 ]; then
-        echo "Failed to create user \"${USERNAME}\" with command \"useradd -d ${HOMEDIR} -g ${PGROUP} -G ${SGROUPS} ${USERNAME}\". Please review errors and retry."
-        exit 1
+      echo "Failed to create user \"${USERNAME}\" with command \"useradd -d ${HOMEDIR} -g ${PGROUP} -G ${SGROUPS} ${USERNAME}\". Please review errors and retry."
+      exit 1
     fi
-else
+  else
     useradd -d ${HOMEDIR} -g ${PGROUP} ${USERNAME}
     if [ $? -ne 0 ]; then
-        echo "Failed to create user \"${USERNAME}\" with command \"useradd -d ${HOMEDIR} -g ${PGROUP} ${USERNAME}\". Please review errors and retry."
-        exit 1
+      echo "Failed to create user \"${USERNAME}\" with command \"useradd -d ${HOMEDIR} -g ${PGROUP} ${USERNAME}\". Please review errors and retry."
+      exit 1
     fi
+  fi
+  echo "Created user \"${USERNAME}\"."
 fi
-
-
-
-echo "Created user \"${USERNAME}\"."
 
 echo "Setting umask for \"${USERNAME}\" to 022 ..."
 umask 022 ${USERNAME}
@@ -358,9 +390,22 @@ if [ ${TYPE} = "target" ]; then
 
   if [ -f "/etc/oratab" ]; then
     ORA_FILE=/etc/oratab
-  else 
+  elif [ -f "/var/opt/oracle/oratab" ]; then
     ORA_FILE=/var/opt/oracle/oratab
+  else
+    echo
+    echo "ERROR: Oracle file oratab cannot be found (checked /etc/oratab and /var/opt/oracle/oratab"
+    exit 1
   fi
+
+  #Test for lines which are not blank or Comments
+  grep . ${ORA_FILE} | grep -v "^#"
+  if [ $? -ne 0 ]; then
+    echo 
+    echo "ERROR: ${ORA_FILE} contains only blank lines and comments.  This scirpt requires a valid oratab with all Oracle Homes listed"
+    exit 1
+  fi
+
 
   echo "Insure we have group Write permission to the ORACLE_HOME/dbs directory:"
   #To get ORACLE_HOME detail from /etc/oratab in linux and changing the permission of ORACLE_HOME/dbs
