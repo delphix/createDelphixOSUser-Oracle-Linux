@@ -10,7 +10,7 @@
 #Defaults
 #Note additional variables are set at the bottom of the script
 NFS_LOCATION=/u01/app/delphix_os/mnt
-KEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCnI9i9CAP96qeDAIYWDVFdVvchxfCmHoTQ70UiOffLmI5msDv1xIt+OKzeBsAxt8ZYFbR6xxSiLlMfT/C1GaKZVIvW5RyuUhQMMtvTWGagb4S+61xOoJ/zPhMb+8uLcbYw6zCUXgIDS9v19DGau4I0/d0T4nUcMg1F8oonfkVLzI9JghsbPwkL5C2mVwdoOa8pUqcvuHb3oQ7ULLq7+RyoQbpLA2Gsmg55ThXsa4smb/ueOfF9XUfZW+DOQ/qo5olGQCoSH1CKBe8S1w/CYOqJZSvaD72nRjTR1aJKvQdA+gCjKEZ3tl+pmXnoD0AbctEJIZBMB/h27uwzuoLfdTPV root@ip-10-234-194-100"
+KEY="ssh-rsa AAAAB3NzaC1yc2Exxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/qo5olGQCoSH1CKBe8S1w/CYOqJZfdPV root@ip-10-10-10-10"
 
 MOUNT="/bin/mount /u01/app/delphix_os/mnt/*, /bin/mount * /u01/app/delphix_os/mnt/*"
 UMOUNT="/bin/umount /u01/app/delphix_os/mnt/*, /bin/umount * /u01/app/delphix_os/mnt/*"
@@ -66,7 +66,7 @@ usage() {
   echo
   echo "-t : Type <source or target>.  REQUIRED PARAMETER"
   echo 
-  echo "-u : Create User. OPTIONAL"
+  echo "-u : Create User. Will create the username.  Default is to modify an existing user. OPTIONAL"
   echo
   echo "-a : Auth Type <key or passwd>. OPTIONAL"
   echo "     key: Add SSH Public Key for Delphix Engine to authorized_keys for the user."
@@ -80,7 +80,7 @@ usage() {
   echo 
   echo "-k : kernel parameters. This only works for targets.  Highly Recommended for Delphix Targets. OPTIONAL"
   echo 
-  echo "-q : Quiet.  Automatically says "Y" to all prompts and accepts defaults.  Specify -y for full automation. OPTIONAL"
+  echo "-q : Quiet.  Automatically says "Y" to all prompts and accepts defaults.  Specify -q for full automation. OPTIONAL"
   echo
   echo "Examples:"
   echo "Create user delphix for a source environment with key authentication:  createDelphixOSUser.sh -t source -u -a key delphix"
