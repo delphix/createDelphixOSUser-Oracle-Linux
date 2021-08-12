@@ -85,7 +85,7 @@ usage() {
   echo "Examples:"
   echo "Create user delphix for a source environment with key authentication:  createDelphixOSUser.sh -t source -u -a key delphix"
   echo "Create user delphix for a target environment with password authentication:  createDelphixOSUser.sh -t target -u -a passwd delphix"
-  echo "Create user delphix for a source, with key auth, sudo privs, and kernel parameter changes:  createDelphixOSUser.sh -t target -u -a key -s -k delphix"
+  echo "Create user delphix for a target, with key auth, sudo privs, and kernel parameter changes:  createDelphixOSUser.sh -t target -u -a key -s -k delphix"
   echo "Same as above with no interaction for full automation:  createDelphixOSUser.sh -t target -u -a key -s -k -q delphix"
 }
 
