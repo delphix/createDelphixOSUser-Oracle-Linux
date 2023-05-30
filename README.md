@@ -15,7 +15,7 @@ Usage: $0 -t source|target [ -a key|passwd ] [ -u ] [ -k ] [ -s ] [ -q ] usernam
 
   -t : Type <source or target>.  REQUIRED PARAMETER
 
-  -u : Create User. Will create the username.  Default is to modify an existing user. OPTIONAL
+  -u : Create User. Will create the username entirely or modify an existing user as follows: properly create toolkit, mountpoint, ensure required permission on the home directory, add proper permissions to $ORACLE_HOME/dbs. OPTIONAL, but typically REQUIRED.
 
   -a : Auth Type <key or passwd>. OPTIONAL
        key: Add SSH Public Key for Delphix Engine to authorized_keys for the user.
@@ -35,6 +35,8 @@ Usage: $0 -t source|target [ -a key|passwd ] [ -u ] [ -k ] [ -s ] [ -q ] usernam
   Create user delphix for a source environment with key authentication:  createDelphixOSUser.sh -t source -u -a key delphix
 
   Create user delphix for a target environment with password authentication:  createDelphixOSUser.sh -t target -u -a passwd delphix
+  
+  Modify user oracle for a target environment with key authentication:  createDelphixOSUser.sh -t target -u -a key oracle
 
   Create user delphix for a source, with key auth, sudo privs, and kernel parameter changes:  createDelphixOSUser.sh -t target -u -a key -s -k delphix
 
